@@ -26,7 +26,25 @@ export interface BlogPost {
   readTime: string;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  cep?: string;
+  cpfCnpj?: string;
+  careOf?: string; // Aos Cuidados
+  street?: string; // Rua
+  number?: string; // Número
+  complement?: string; // Complemento
+  neighborhood?: string; // Bairro
+  state?: string; // Estado
+  city?: string; // Cidade
+  reference?: string; // Referência
+  phones?: string[]; // telefones
+}
+
 export interface StoreData {
   products: Product[];
   blogPosts: BlogPost[];
 }
+

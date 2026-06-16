@@ -152,6 +152,7 @@ function loadDB(): {
   blogPosts: typeof INITIAL_BLOG;
   categories: string[];
   auditLogs: AuditLog[];
+  users: any[];
 } {
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -173,6 +174,7 @@ function loadDB(): {
         modified = true;
       }
       if (!parsed.auditLogs) { parsed.auditLogs = []; modified = true; }
+      if (!parsed.users) { parsed.users = []; modified = true; }
       
       if (modified) {
         saveDB(parsed);
@@ -194,7 +196,8 @@ function loadDB(): {
       "Munições e Chumbinhos",
       "Alvos e Estande"
     ],
-    auditLogs: []
+    auditLogs: [],
+    users: []
   };
   saveDB(initial);
   return initial;
@@ -287,6 +290,128 @@ app.post("/api/verify-2fa", (req, res) => {
   }
   logAudit("Acesso Concedido (2FA)", `Autenticação em duas etapas superada para o operador '${username}'. Token de sessão administrativa gerado.`, req);
   return res.json({ success: true, token: ADMIN_TOKEN });
+});
+
+// ---------------- USER SIGNUP & AUTHENTICATION ENDPOINTS ----------------
+
+// User Registration
+app.post("/api/users/register", (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "Nome, e-mail e senha são obrigatórios para realizar o cadastro." });
+  }
+
+  const db = loadDB();
+  const emailLower = email.toLowerCase().trim();
+  
+  const userExists = db.users.find(u => u.email.toLowerCase().trim() === emailLower);
+  if (userExists) {
+    return res.status(400).json({ error: "Este endereço de e-mail já está cadastrado no sistema." });
+  }
+
+  const newUser = {
+    id: `user-${Date.now()}`,
+    name: name.trim(),
+    email: emailLower,
+    password: password, // simple password for demonstration
+    phones: [],
+    cep: "",
+    careOf: "",
+    street: "",
+    number: "",
+    complement: "",
+    neighborhood: "",
+    state: "",
+    city: "",
+    reference: ""
+  };
+
+  db.users.push(newUser);
+  saveDB(db);
+  logAudit("Cadastro de Usuário", `Novo usuário cadastrado sob e-mail '${newUser.email}' e nome '${newUser.name}'.`, req);
+
+  // Return user file without password
+  const { password: _, ...userNoPassword } = newUser;
+  res.status(201).json({ success: true, user: userNoPassword });
+});
+
+// User Login
+app.post("/api/users/login", (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "E-mail e senha são necessários para conectar." });
+  }
+
+  const db = loadDB();
+  const emailLower = email.toLowerCase().trim();
+  const user = db.users.find(u => u.email.toLowerCase().trim() === emailLower);
+
+  if (!user || user.password !== password) {
+    return res.status(400).json({ error: "Combinação de e-mail e senha incorreta." });
+  }
+
+  logAudit("Login de Usuário", `Usuário '${user.email}' entrou na conta com sucesso.`, req);
+  const { password: _, ...userNoPassword } = user;
+  res.json({ success: true, user: userNoPassword });
+});
+
+// Update User Profile/Details (Address, CPF/CNPJ, Phones, password/details)
+app.put("/api/users/profile", (req, res) => {
+  const { 
+    id, 
+    name, 
+    email, 
+    cep, 
+    cpfCnpj, 
+    careOf, 
+    street, 
+    number, 
+    complement, 
+    neighborhood, 
+    state, 
+    city, 
+    reference, 
+    phones,
+    password
+  } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "ID de usuário inválido para atualização." });
+  }
+
+  const db = loadDB();
+  const userIndex = db.users.findIndex(u => u.id === id);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Usuário não localizado no banco de dados." });
+  }
+
+  const currentUser = db.users[userIndex];
+
+  // Merge the new details
+  db.users[userIndex] = {
+    ...currentUser,
+    name: name !== undefined ? name.trim() : currentUser.name,
+    email: email !== undefined ? email.toLowerCase().trim() : currentUser.email,
+    cep: cep !== undefined ? cep : currentUser.cep,
+    cpfCnpj: cpfCnpj !== undefined ? cpfCnpj : currentUser.cpfCnpj,
+    careOf: careOf !== undefined ? careOf : currentUser.careOf,
+    street: street !== undefined ? street : currentUser.street,
+    number: number !== undefined ? number : currentUser.number,
+    complement: complement !== undefined ? complement : currentUser.complement,
+    neighborhood: neighborhood !== undefined ? neighborhood : currentUser.neighborhood,
+    state: state !== undefined ? state : currentUser.state,
+    city: city !== undefined ? city : currentUser.city,
+    reference: reference !== undefined ? reference : currentUser.reference,
+    phones: phones !== undefined ? phones : currentUser.phones,
+    password: password !== undefined ? password : currentUser.password
+  };
+
+  saveDB(db);
+  logAudit("Edição de Perfil", `Perfil do usuário '${currentUser.email}' foi atualizado.`, req);
+
+  const { password: _, ...userNoPassword } = db.users[userIndex];
+  res.json({ success: true, user: userNoPassword });
 });
 
 // Categories endpoints

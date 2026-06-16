@@ -13,6 +13,7 @@ interface CartDrawerProps {
   cartItems: CartItem[];
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
+  onOpenCheckout: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -21,32 +22,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   cartItems,
   onUpdateQuantity,
   onRemoveItem,
+  onOpenCheckout,
 }) => {
   if (!isOpen) return null;
 
   const total = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
-  const handleCheckoutWhatsApp = () => {
-    // Generate beautiful shopping text in portuguese
-    let msg = `Olá Torn Carabinas! Gostaria de fazer o pedido dos seguintes equipamentos de tiro:\n\n`;
-    
-    cartItems.forEach((item, idx) => {
-      msg += `${idx + 1}. *${item.product.name}*\n`;
-      msg += `   Qtd: ${item.quantity}x | Preço: R$ ${(item.product.price * item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
-      if (item.product.caliber && item.product.caliber !== "N/A") {
-        msg += `   Calibre: ${item.product.caliber}\n`;
-      }
-      msg += `\n`;
-    });
-
-    msg += `*Valor Total:* R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n\n`;
-    msg += `Por favor, me confirme a chave PIX e frete para envio!`;
-
-    const encodedMsg = encodeURIComponent(msg);
-    const whatsappUrl = `https://wa.me/5511999999999?text=${encodedMsg}`;
-    
-    window.open(whatsappUrl, "_blank");
-  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -170,15 +151,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               <div className="space-y-2">
                 <button
-                  onClick={handleCheckoutWhatsApp}
+                  onClick={onOpenCheckout}
                   className="w-full h-11 flex items-center justify-center gap-2 rounded bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-white text-xs transition-colors shadow-lg shadow-black/45 active:translate-y-px cursor-pointer"
                 >
                   <MessageSquareCode size={15} />
-                  <span>Finalizar Pedido WhatsApp</span>
+                  <span>Finalizar Pedido — Detalhes</span>
                 </button>
 
                 <p className="text-[9px] text-zinc-500 text-center leading-normal">
-                  Após clicar, um rascunho de pedido estruturado será enviado no WhatsApp da Torn Carabinas para fechamento imediato.
+                  Preencha os detalhes logísticos de entrega (autocompletados se logado) antes do envio para o WhatsApp da loja.
                 </p>
               </div>
             </div>

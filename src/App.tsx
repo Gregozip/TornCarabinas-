@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { Product, BlogPost } from "./types";
+import { Product, BlogPost, UserProfile } from "./types";
 import { ProductCard } from "./components/ProductCard";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BlogModal } from "./components/BlogModal";
 import { AdminPanel } from "./components/AdminPanel";
 import { CartDrawer } from "./components/CartDrawer";
+import { UserAccountModal } from "./components/UserAccountModal";
+import { CheckoutModal } from "./components/CheckoutModal";
 import {
   Crosshair,
   Search,
@@ -21,7 +23,8 @@ import {
   LockKeyhole,
   Lock,
   Compass,
-  FileText
+  FileText,
+  ShoppingCart
 } from "lucide-react";
 
 interface CartItem {
@@ -54,6 +57,14 @@ export default function App() {
   
   // View switches
   const [currentSection, setCurrentSection] = useState<"store" | "admin">("store");
+
+  // User Authentication & Address State
+  const [loggedUser, setLoggedUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem("torn_user");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   
   // Interactive UI states
   const [searchQuery, setSearchQuery] = useState("");
@@ -122,6 +133,16 @@ export default function App() {
     });
     // Auto open cart drawer to feel smooth & interactive
     setIsCartOpen(true);
+  };
+
+  const handleLoginSuccess = (user: UserProfile) => {
+    setLoggedUser(user);
+    localStorage.setItem("torn_user", JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setLoggedUser(null);
+    localStorage.removeItem("torn_user");
   };
 
   const handleUpdateCartQuantity = (productId: string, quantity: number) => {
@@ -216,20 +237,38 @@ export default function App() {
         </div>
 
         {/* Right side controls: Cart */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {currentSection === "store" && (
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="relative h-10 px-4 rounded-xl bg-red-650/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white flex items-center gap-2 transition-all duration-200 active:scale-95"
-            >
-              <ShoppingBag size={16} />
-              <span className="text-xs font-bold uppercase tracking-wider">Carrinho</span>
-              {cartItemsCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-red-650 text-white rounded-full text-[10px] font-bold flex items-center justify-center animate-bounce">
-                  {cartItemsCount}
+            <>
+              {/* My Account Button */}
+              <button
+                onClick={() => setIsAccountOpen(true)}
+                className={`h-10 px-3.5 rounded-xl border flex items-center gap-1.5 transition-all duration-200 active:scale-95 cursor-pointer ${
+                  loggedUser 
+                    ? "bg-zinc-900 border-zinc-850 text-zinc-300 hover:text-white" 
+                    : "bg-red-650/10 border-red-500/20 text-red-400 hover:bg-red-600 hover:text-white"
+                }`}
+                title={loggedUser ? "Meus Dados e Telefones" : "Minha Conta / Registrar"}
+              >
+                <User size={14} />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  {loggedUser ? `${loggedUser.name.split(" ")[0]}` : "Registrar / Entrar"}
                 </span>
-              )}
-            </button>
+              </button>
+
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="relative h-10 px-4 rounded-xl bg-red-650/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white flex items-center gap-2 transition-all duration-200 active:scale-95 cursor-pointer"
+              >
+                <ShoppingBag size={15} />
+                <span className="text-xs font-bold uppercase tracking-wider">Carrinho</span>
+                {cartItemsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-red-650 text-white rounded-full text-[10px] font-bold flex items-center justify-center animate-bounce">
+                    {cartItemsCount}
+                  </span>
+                )}
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -303,12 +342,12 @@ export default function App() {
               {/* Decorative side badge */}
               <div className="hidden lg:flex flex-col items-center justify-center p-8 bg-zinc-900/60 border border-zinc-800 rounded-xl relative max-w-xs space-y-4">
                 <div className="h-12 w-12 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/30 text-red-500">
-                  <Wrench size={22} className="animate-pulse" />
+                  <ShoppingCart size={22} className="animate-pulse" />
                 </div>
                 <div className="text-center">
-                  <span className="block font-bold text-zinc-200 text-sm">Oficina Especializada de PCP</span>
+                  <span className="block font-bold text-zinc-200 text-sm">Loja especializada na venda de carabinas e airsofts</span>
                   <p className="text-[11px] text-zinc-500 mt-1">
-                    Customização de vedações, reguladores de pressão e consultoria balística para nossos atiradores.
+                    Os melhores equipamentos do mercado de tiro e airsoft com suporte logístico personalizado e documentação completa.
                   </p>
                 </div>
               </div>
@@ -675,6 +714,29 @@ export default function App() {
         cartItems={cartItems}
         onUpdateQuantity={handleUpdateCartQuantity}
         onRemoveItem={handleRemoveCartItem}
+        onOpenCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+        }}
+      />
+
+      {/* User registration/profile modal */}
+      <UserAccountModal
+        isOpen={isAccountOpen}
+        onClose={() => setIsAccountOpen(false)}
+        loggedUser={loggedUser}
+        onLoginSuccess={handleLoginSuccess}
+        onLogout={handleLogout}
+      />
+
+      {/* Structured Checkout details modal */}
+      <CheckoutModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        loggedUser={loggedUser}
+        cartItems={cartItems}
+        total={cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0)}
+        onLoginSuccess={handleLoginSuccess}
       />
 
     </div>
