@@ -1,0 +1,6 @@
+{
+  "name": "Torn Carabinas",
+  "description": "Loja premium de carabinas e equipamentos de tiro esportivo com catálogo interativo e blog integrado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
