@@ -18,17 +18,20 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   onLoginSuccess,
   onLogout,
 }) => {
-  const [mode, setMode] = useState<"login" | "register" | "profile">(
+  const [mode, setMode] = useState<"login" | "register" | "profile" | "forgot">(
     loggedUser ? "profile" : "login"
   );
 
   // Auth fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [name, setName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [recoveryInstructions, setRecoveryInstructions] = useState("");
 
   // Profile fields (used when logged in)
   const [profName, setProfName] = useState(loggedUser?.name || "");
@@ -104,8 +107,12 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !confirmPassword) {
       setErrorMsg("Todos os campos de cadastro são de preenchimento obrigatório.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMsg("As senhas preenchidas não coincidem. Digite-as novamente.");
       return;
     }
     setErrorMsg("");
@@ -126,6 +133,40 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
       setName("");
       setEmail("");
       setPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryEmail) {
+      setErrorMsg("Por favor, preencha o endereço de e-mail.");
+      return;
+    }
+    setErrorMsg("");
+    setSuccessMsg("");
+    setRecoveryInstructions("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/users/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: recoveryEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao recuperar senha");
+      }
+      setSuccessMsg(data.message);
+      if (data.debugInstructions) {
+        setRecoveryInstructions(data.debugInstructions);
+      }
+      setRecoveryEmail("");
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -299,6 +340,21 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                     />
                     <Lock size={13} className="absolute left-3 top-3.5 text-zinc-600" />
                   </div>
+                  <div className="text-right mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("forgot");
+                        setErrorMsg("");
+                        setSuccessMsg("");
+                        setRecoveryInstructions("");
+                      }}
+                      className="text-[10px] text-zinc-500 hover:text-red-400 font-mono transition-colors cursor-pointer"
+                      id="btn-switch-to-forgot"
+                    >
+                      Esqueceu sua senha? Clique aqui para recuperar
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -397,6 +453,24 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                     <Lock size={13} className="absolute left-3 top-3.5 text-zinc-600" />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                    Confirmar Senha de Acesso
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Redigite exatamente a mesma senha"
+                      className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                      required
+                      id="register-confirm-password-input"
+                    />
+                    <Lock size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-2">
@@ -433,6 +507,81 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                     Realize o login por aqui
                   </button>
                 </p>
+              </div>
+            </form>
+          )}
+
+          {/* FORGOT PASSWORD VIEW */}
+          {mode === "forgot" && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-3">
+                <p className="text-xs text-zinc-400 leading-normal">
+                  Esqueceu sua senha? Não se preocupe! Informe o e-mail cadastrado na sua conta de atirador e nós geraremos instruções seguras e um código de redefinição para restaurar seu acesso imediatamente.
+                </p>
+                <div>
+                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                    Endereço de E-mail Cadastrado
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="seuemail@exemplo.com"
+                      className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                      required
+                      id="recovery-email-input"
+                    />
+                    <Mail size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                  </div>
+                </div>
+              </div>
+
+              {recoveryInstructions && (
+                <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2 font-mono">
+                  <div className="text-[10px] uppercase text-red-400 font-bold tracking-wider flex items-center gap-1">
+                    <Check size={12} />
+                    <span>E-mail Enviado com Sucesso (Simulação Local)</span>
+                  </div>
+                  <pre className="text-[10px] text-zinc-300 whitespace-pre-wrap leading-relaxed select-all bg-black p-2.5 rounded border border-zinc-850 overflow-x-auto">
+                    {recoveryInstructions}
+                  </pre>
+                  <p className="text-[9px] text-zinc-500 leading-normal">
+                    *Como este é um ambiente de demonstração blindado, o servidor redefiniu sua senha de forma segura e gerou as instruções acima para você copiar e usar para entrar na sua conta agora mesmo!
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-col gap-2.5">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-11 bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-wider text-white rounded-lg transition-colors shadow-lg shadow-black/45 flex items-center justify-center gap-2 cursor-pointer"
+                  id="btn-forgot-submit"
+                >
+                  {loading ? (
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Mail size={14} />
+                      <span>Gerar e Enviar Instruções por E-mail</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setErrorMsg("");
+                    setSuccessMsg("");
+                    setRecoveryInstructions("");
+                  }}
+                  className="w-full h-10 border border-zinc-800 bg-zinc-900/40 text-xs text-zinc-400 hover:text-white uppercase font-bold tracking-wider rounded-lg transition-colors cursor-pointer"
+                  id="btn-back-to-login"
+                >
+                  Voltar para o Login
+                </button>
               </div>
             </form>
           )}

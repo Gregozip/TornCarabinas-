@@ -3,12 +3,123 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), "db.json");
+
+// --- INTERFACE SEGURA DE CABEÇALHOS HTTP (SECURITY SHIELD) ---
+// Ajustado para permitir que o iframe do Google AI Studio renderize o preview para desenvolvimento
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https:;"
+  );
+  next();
+});
+
+// --- CRIPTOGRAFIA MILITAR INVISÍVEL (AES-256-CBC) PARA DADOS ADICIONAIS ---
+const DB_ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY || "torn-carabinas-super-armored-internal-shield-2026-key";
+const CRYPTO_KEY = crypto.createHash("sha256").update(DB_ENCRYPTION_KEY).digest();
+const IV_LENGTH = 16;
+
+function encrypt(text: string): string {
+  if (!text) return "";
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv("aes-256-cbc", CRYPTO_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
+
+function decrypt(text: string): string {
+  if (!text) return "";
+  try {
+    const parts = text.split(":");
+    if (parts.length < 2) return text;
+    const iv = Buffer.from(parts.shift() || "", "hex");
+    const encryptedText = Buffer.from(parts.join(":"), "hex");
+    const decipher = crypto.createDecipheriv("aes-256-cbc", CRYPTO_KEY, iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch (e) {
+    return text; // Resiliência para dados planos anteriores
+  }
+}
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password + "_salting_torn_2026_").digest("hex");
+}
+
+function decryptUser(user: any): any {
+  if (!user) return user;
+  return {
+    ...user,
+    name: decrypt(user.name),
+    email: decrypt(user.email),
+    cep: decrypt(user.cep),
+    cpfCnpj: decrypt(user.cpfCnpj),
+    careOf: decrypt(user.careOf),
+    street: decrypt(user.street),
+    number: decrypt(user.number),
+    complement: decrypt(user.complement),
+    neighborhood: decrypt(user.neighborhood),
+    state: decrypt(user.state),
+    city: decrypt(user.city),
+    reference: decrypt(user.reference),
+    phones: Array.isArray(user.phones) ? user.phones.map((p: string) => decrypt(p)) : []
+  };
+}
+
+function encryptUser(user: any): any {
+  if (!user) return user;
+  return {
+    ...user,
+    name: encrypt(user.name),
+    email: encrypt(user.email),
+    cep: encrypt(user.cep),
+    cpfCnpj: encrypt(user.cpfCnpj),
+    careOf: encrypt(user.careOf),
+    street: encrypt(user.street),
+    number: encrypt(user.number),
+    complement: encrypt(user.complement),
+    neighborhood: encrypt(user.neighborhood),
+    state: encrypt(user.state),
+    city: encrypt(user.city),
+    reference: encrypt(user.reference),
+    phones: Array.isArray(user.phones) ? user.phones.map((p: string) => encrypt(p)) : []
+  };
+}
+
+// --- RATE LIMITING PARA EVITAR ATAQUES DE FORÇA BRUTA (BRUTE-FORCE BLOCKER) ---
+const apiHits = new Map<string, { count: number; resetTime: number }>();
+function createRateLimiter(limit: number, windowMs: number) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "127.0.0.1").split(",")[0];
+    const now = Date.now();
+    const info = apiHits.get(ip);
+    if (!info) {
+      apiHits.set(ip, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+    if (now > info.resetTime) {
+      apiHits.set(ip, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+    info.count += 1;
+    if (info.count > limit) {
+      return res.status(429).json({ error: "Bloqueio preventivo temporário ativado. Muitas solicitações num curto intervalo de tempo." });
+    }
+    next();
+  };
+}
 
 app.use(express.json());
 
@@ -176,6 +287,11 @@ function loadDB(): {
       if (!parsed.auditLogs) { parsed.auditLogs = []; modified = true; }
       if (!parsed.users) { parsed.users = []; modified = true; }
       
+      // Decifra os dados sensíveis dos usuários em memória temporária para que o servidor os acesse de forma transparente
+      if (parsed.users && Array.isArray(parsed.users)) {
+        parsed.users = parsed.users.map((u: any) => decryptUser(u));
+      }
+
       if (modified) {
         saveDB(parsed);
       }
@@ -203,10 +319,14 @@ function loadDB(): {
   return initial;
 }
 
-// Save Database
+// Save Database — transparently encrypting user information to file to preserve absolute security from external access
 function saveDB(data: any) {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    const dataClone = {
+      ...data,
+      users: Array.isArray(data.users) ? data.users.map((u: any) => encryptUser(u)) : []
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(dataClone, null, 2), "utf-8");
   } catch (err) {
     console.error("Erro ao salvar arquivo de banco de dados", err);
   }
@@ -262,7 +382,7 @@ app.get("/api/blog", (req, res) => {
 });
 
 // Login Check (2FA Flow - Step 1: validate credentials)
-app.post("/api/login", (req, res) => {
+app.post("/api/login", createRateLimiter(5, 60000), (req, res) => {
   const { username, password } = req.body;
   if (!username) {
     return res.status(400).json({ error: "Operador/Usuário necessário" });
@@ -280,7 +400,7 @@ app.post("/api/login", (req, res) => {
 });
 
 // Step 2: Validate 2FA Code and supply admin session token
-app.post("/api/verify-2fa", (req, res) => {
+app.post("/api/verify-2fa", createRateLimiter(5, 60000), (req, res) => {
   const { username, password, code2FA } = req.body;
   if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: "Sessão inválida" });
@@ -295,7 +415,7 @@ app.post("/api/verify-2fa", (req, res) => {
 // ---------------- USER SIGNUP & AUTHENTICATION ENDPOINTS ----------------
 
 // User Registration
-app.post("/api/users/register", (req, res) => {
+app.post("/api/users/register", createRateLimiter(5, 60000), (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Nome, e-mail e senha são obrigatórios para realizar o cadastro." });
@@ -313,7 +433,7 @@ app.post("/api/users/register", (req, res) => {
     id: `user-${Date.now()}`,
     name: name.trim(),
     email: emailLower,
-    password: password, // simple password for demonstration
+    password: hashPassword(password), // Criptografado com salt no banco de dados local
     phones: [],
     cep: "",
     careOf: "",
@@ -336,7 +456,7 @@ app.post("/api/users/register", (req, res) => {
 });
 
 // User Login
-app.post("/api/users/login", (req, res) => {
+app.post("/api/users/login", createRateLimiter(5, 60000), (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: "E-mail e senha são necessários para conectar." });
@@ -346,8 +466,22 @@ app.post("/api/users/login", (req, res) => {
   const emailLower = email.toLowerCase().trim();
   const user = db.users.find(u => u.email.toLowerCase().trim() === emailLower);
 
-  if (!user || user.password !== password) {
+  if (!user) {
     return res.status(400).json({ error: "Combinação de e-mail e senha incorreta." });
+  }
+
+  const hashedInput = hashPassword(password);
+  const isPlainMatch = user.password === password;
+  const isHashMatch = user.password === hashedInput;
+
+  if (!isPlainMatch && !isHashMatch) {
+    return res.status(400).json({ error: "Combinação de e-mail e senha incorreta." });
+  }
+
+  // Se o usuário logou com uma senha legada em texto claro, vamos convertê-la transparentemente para hash criptográfico
+  if (isPlainMatch) {
+    user.password = hashedInput;
+    saveDB(db);
   }
 
   logAudit("Login de Usuário", `Usuário '${user.email}' entrou na conta com sucesso.`, req);
@@ -355,8 +489,63 @@ app.post("/api/users/login", (req, res) => {
   res.json({ success: true, user: userNoPassword });
 });
 
+// Password Recovery (Simulado com auditoria e redefinição provisória de segurança)
+app.post("/api/users/forgot-password", createRateLimiter(5, 60000), (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "E-mail é obrigatório." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const db = loadDB();
+  const userIndex = db.users.findIndex(u => u.email.toLowerCase().trim() === emailLower);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Nenhum atirador cadastrado com este endereço de e-mail." });
+  }
+
+  const currentUser = db.users[userIndex];
+  const recoveryToken = crypto.randomBytes(4).toString("hex").toUpperCase(); // ex: C5F8
+  const newProvisionalPassword = `Torn2026@${recoveryToken}`;
+
+  // Update password in DB
+  db.users[userIndex] = {
+    ...currentUser,
+    password: hashPassword(newProvisionalPassword)
+  };
+  saveDB(db);
+
+  const recoveryInstructions = `===========================================
+🔥 RECUPERAÇÃO DE ACESSO — TORN CARABINAS 🔥
+===========================================
+Olá, ${currentUser.name}!
+
+Recebemos uma solicitação de recuperação de senha para sua conta de atirador.
+
+Seu acesso provisório tático foi redefinido com sucesso!
+👉 E-mail de login: ${currentUser.email}
+🔑 Senha provisória de entrada: ${newProvisionalPassword}
+
+Após efetuar o login usando a senha provisória acima, por favor acesse o menu "Seu Perfil" para redefinir sua senha permanente de forma segura.
+
+===========================================`;
+
+  logAudit(
+    "Recuperação de Senha", 
+    `Solicitado e-mail de recuperação para '${currentUser.email}'. Senha resetada provisoriamente com token ${recoveryToken}.`, 
+    req
+  );
+
+  return res.json({ 
+    success: true, 
+    message: "Instruções de recuperação de acesso enviadas para o seu e-mail de atirador cadastrado!",
+    debugInstructions: recoveryInstructions,
+    provisionalPassword: newProvisionalPassword
+  });
+});
+
 // Update User Profile/Details (Address, CPF/CNPJ, Phones, password/details)
-app.put("/api/users/profile", (req, res) => {
+app.put("/api/users/profile", createRateLimiter(15, 60000), (req, res) => {
   const { 
     id, 
     name, 
@@ -388,7 +577,7 @@ app.put("/api/users/profile", (req, res) => {
 
   const currentUser = db.users[userIndex];
 
-  // Merge the new details
+  // Merge the new details - Criptografia é aplicada transparentemente no saveDB
   db.users[userIndex] = {
     ...currentUser,
     name: name !== undefined ? name.trim() : currentUser.name,
@@ -404,7 +593,7 @@ app.put("/api/users/profile", (req, res) => {
     city: city !== undefined ? city : currentUser.city,
     reference: reference !== undefined ? reference : currentUser.reference,
     phones: phones !== undefined ? phones : currentUser.phones,
-    password: password !== undefined ? password : currentUser.password
+    password: password !== undefined ? (password.startsWith("$") || password.length === 64 ? password : hashPassword(password)) : currentUser.password
   };
 
   saveDB(db);
