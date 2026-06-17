@@ -148,6 +148,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <span className="text-[10px] text-zinc-500 block uppercase tracking-wider">Valor à Vista</span>
+                    {product.originalPrice && product.originalPrice > product.price && (
+                      <span className="text-xs text-zinc-500 line-through block mt-0.5" id={`detail-old-price-${product.id}`}>
+                        De: R$ {(product.originalPrice * quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
                     <span className="text-xl font-bold text-white font-display">
                       R$ {(product.price * quantity).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>

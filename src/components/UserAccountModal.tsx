@@ -33,6 +33,13 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [recoveryInstructions, setRecoveryInstructions] = useState("");
 
+  // States for resetting password with custom 24-day unique tokens
+  const [forgotSubMode, setForgotSubMode] = useState<"request" | "reset">("request");
+  const [resetToken, setResetToken] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+
   // Profile fields (used when logged in)
   const [profName, setProfName] = useState(loggedUser?.name || "");
   const [profEmail, setProfEmail] = useState(loggedUser?.email || "");
@@ -167,6 +174,48 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
         setRecoveryInstructions(data.debugInstructions);
       }
       setRecoveryEmail("");
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordWithToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !resetToken || !resetNewPassword || !resetConfirmPassword) {
+      setErrorMsg("Todos os campos de redefinição são obrigatórios.");
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      setErrorMsg("As senhas preenchidas não coincidem.");
+      return;
+    }
+    setErrorMsg("");
+    setSuccessMsg("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/users/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: resetEmail, 
+          token: resetToken, 
+          newPassword: resetNewPassword 
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao redefinir senha");
+      }
+      setSuccessMsg("Senha redefinida com extremo sucesso! Use sua nova credencial para entrar agora.");
+      setResetEmail("");
+      setResetToken("");
+      setResetNewPassword("");
+      setResetConfirmPassword("");
+      setForgotSubMode("request");
+      setMode("login");
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -513,77 +562,242 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
 
           {/* FORGOT PASSWORD VIEW */}
           {mode === "forgot" && (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="space-y-3">
-                <p className="text-xs text-zinc-400 leading-normal">
-                  Esqueceu sua senha? Não se preocupe! Informe o e-mail cadastrado na sua conta de atirador e nós geraremos instruções seguras e um código de redefinição para restaurar seu acesso imediatamente.
-                </p>
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
-                    Endereço de E-mail Cadastrado
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={recoveryEmail}
-                      onChange={(e) => setRecoveryEmail(e.target.value)}
-                      placeholder="seuemail@exemplo.com"
-                      className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
-                      required
-                      id="recovery-email-input"
-                    />
-                    <Mail size={13} className="absolute left-3 top-3.5 text-zinc-600" />
-                  </div>
-                </div>
-              </div>
-
-              {recoveryInstructions && (
-                <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2 font-mono">
-                  <div className="text-[10px] uppercase text-red-400 font-bold tracking-wider flex items-center gap-1">
-                    <Check size={12} />
-                    <span>E-mail Enviado com Sucesso (Simulação Local)</span>
-                  </div>
-                  <pre className="text-[10px] text-zinc-300 whitespace-pre-wrap leading-relaxed select-all bg-black p-2.5 rounded border border-zinc-850 overflow-x-auto">
-                    {recoveryInstructions}
-                  </pre>
-                  <p className="text-[9px] text-zinc-500 leading-normal">
-                    *Como este é um ambiente de demonstração blindado, o servidor redefiniu sua senha de forma segura e gerou as instruções acima para você copiar e usar para entrar na sua conta agora mesmo!
-                  </p>
-                </div>
-              )}
-
-              <div className="pt-2 flex flex-col gap-2.5">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full h-11 bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-wider text-white rounded-lg transition-colors shadow-lg shadow-black/45 flex items-center justify-center gap-2 cursor-pointer"
-                  id="btn-forgot-submit"
-                >
-                  {loading ? (
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Mail size={14} />
-                      <span>Gerar e Enviar Instruções por E-mail</span>
-                    </>
-                  )}
-                </button>
-
+            <div className="space-y-4" id="forgot-password-view-container">
+              {/* Subs-mode Switch Tabs */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-lg border border-zinc-800">
                 <button
                   type="button"
                   onClick={() => {
-                    setMode("login");
+                    setForgotSubMode("request");
                     setErrorMsg("");
                     setSuccessMsg("");
-                    setRecoveryInstructions("");
                   }}
-                  className="w-full h-10 border border-zinc-800 bg-zinc-900/40 text-xs text-zinc-400 hover:text-white uppercase font-bold tracking-wider rounded-lg transition-colors cursor-pointer"
-                  id="btn-back-to-login"
+                  className={`py-2 text-[10px] font-bold uppercase tracking-wider rounded-md font-mono transition-all cursor-pointer ${
+                    forgotSubMode === "request"
+                      ? "bg-red-600 text-white shadow-md shadow-black/40"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                  id="tab-request-code"
                 >
-                  Voltar para o Login
+                  1. Solicitar Código
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotSubMode("reset");
+                    setErrorMsg("");
+                    setSuccessMsg("");
+                  }}
+                  className={`py-2 text-[10px] font-bold uppercase tracking-wider rounded-md font-mono transition-all cursor-pointer ${
+                    forgotSubMode === "reset"
+                      ? "bg-red-600 text-white shadow-md shadow-black/40"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                  id="tab-reset-password"
+                >
+                  2. Redefinir com Token
                 </button>
               </div>
-            </form>
+
+              {forgotSubMode === "request" ? (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-xs text-zinc-400 leading-normal">
+                      Esqueceu sua senha? Não se preocupe! Informe o e-mail cadastrado na sua conta de atirador e nós geraremos instruções seguras e um código de redefinição único de 24 dias para restaurar seu acesso imediatamente.
+                    </p>
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                        Endereço de E-mail Cadastrado
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={recoveryEmail}
+                          onChange={(e) => setRecoveryEmail(e.target.value)}
+                          placeholder="seuemail@exemplo.com"
+                          className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                          required
+                          id="recovery-email-input"
+                        />
+                        <Mail size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {recoveryInstructions && (
+                    <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2 font-mono" id="recovery-instructions-box">
+                      <div className="text-[10px] uppercase text-red-400 font-bold tracking-wider flex items-center gap-1">
+                        <Check size={12} />
+                        <span>Token Gerado com Sucesso!</span>
+                      </div>
+                      <pre className="text-[10px] text-zinc-300 whitespace-pre-wrap leading-relaxed select-all bg-black p-2.5 rounded border border-zinc-850 overflow-x-auto">
+                        {recoveryInstructions}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForgotSubMode("reset");
+                          setResetEmail(recoveryEmail || "");
+                          // Extract token (TORN-XXXXXX) if present in the instructions
+                          const matchToken = recoveryInstructions.match(/(TORN-[A-Z0-9]{6})/i);
+                          if (matchToken && matchToken[1]) {
+                            setResetToken(matchToken[1]);
+                          }
+                        }}
+                        className="text-[10.5px] text-red-400 hover:text-red-300 font-bold underline block mt-1 cursor-pointer"
+                        id="btn-go-to-reset-step"
+                      >
+                        Ir para a tela 2: Redefinir com o Token acima →
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex flex-col gap-2.5">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full h-11 bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-wider text-white rounded-lg transition-colors shadow-lg shadow-black/45 flex items-center justify-center gap-2 cursor-pointer"
+                      id="btn-forgot-submit"
+                    >
+                      {loading ? (
+                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Mail size={14} />
+                          <span>Gerar e Enviar Instruções por E-mail</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("login");
+                        setErrorMsg("");
+                        setSuccessMsg("");
+                        setRecoveryInstructions("");
+                        setForgotSubMode("request");
+                      }}
+                      className="w-full h-10 border border-zinc-800 bg-zinc-900/40 text-xs text-zinc-400 hover:text-white uppercase font-bold tracking-wider rounded-lg transition-colors cursor-pointer"
+                      id="btn-back-to-login"
+                    >
+                      Voltar para o Login
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleResetPasswordWithToken} className="space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-xs text-zinc-400 leading-normal">
+                      Insira o token de 24 dias recebido nas instruções de e-mail e escolha sua nova senha de acesso permanente.
+                    </p>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                        Endereço de E-mail
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                          placeholder="seuemail@exemplo.com"
+                          className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                          required
+                          id="reset-email-input"
+                        />
+                        <Mail size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                        Token de Recuperação (Cupom de Segurança)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={resetToken}
+                          onChange={(e) => setResetToken(e.target.value)}
+                          placeholder="Ex: TORN-ABCD12"
+                          className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                          required
+                          id="reset-token-input"
+                        />
+                        <ShieldCheck size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                        Nova Senha
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="password"
+                          value={resetNewPassword}
+                          onChange={(e) => setResetNewPassword(e.target.value)}
+                          placeholder="Sua senha secreta de atirador"
+                          className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                          required
+                          id="reset-new-password-input"
+                        />
+                        <Lock size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-400 mb-1.5">
+                        Confirmar Nova Senha
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="password"
+                          value={resetConfirmPassword}
+                          onChange={(e) => setResetConfirmPassword(e.target.value)}
+                          placeholder="Confirme a nova senha"
+                          className="w-full bg-zinc-950 border border-zinc-805 rounded-lg py-2.5 pl-9 pr-4 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono placeholder:text-zinc-700"
+                          required
+                          id="reset-confirm-password-input"
+                        />
+                        <Lock size={13} className="absolute left-3 top-3.5 text-zinc-600" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2.5">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full h-11 bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-wider text-white rounded-lg transition-colors shadow-lg shadow-black/45 flex items-center justify-center gap-2 cursor-pointer"
+                      id="btn-reset-password-submit"
+                    >
+                      {loading ? (
+                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Check size={14} />
+                          <span>Salvar & Ativar Nova Senha</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotSubMode("request");
+                        setErrorMsg("");
+                        setSuccessMsg("");
+                      }}
+                      className="w-full h-10 border border-zinc-800 bg-zinc-900/40 text-xs text-zinc-400 hover:text-white uppercase font-bold tracking-wider rounded-lg transition-colors cursor-pointer"
+                      id="btn-back-to-request"
+                    >
+                      Voltar para Solicitar Token
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
 
           {/* LOGGED PROFILE VIEW & ADDRESS MANAGEMENT */}

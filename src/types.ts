@@ -3,6 +3,7 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  originalPrice?: number;
   stock: number;
   category: string;
   imageUrl: string;
@@ -46,5 +47,11 @@ export interface UserProfile {
 export interface StoreData {
   products: Product[];
   blogPosts: BlogPost[];
+}
+
+export interface StoreSettings {
+  logoUrl: string;
+  logoText: string;
+  logoSubtext: string;
 }
 

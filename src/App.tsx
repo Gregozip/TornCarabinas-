@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Product, BlogPost, UserProfile } from "./types";
+import { Product, BlogPost, UserProfile, StoreSettings } from "./types";
 import { ProductCard } from "./components/ProductCard";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BlogModal } from "./components/BlogModal";
 import { AdminPanel } from "./components/AdminPanel";
+import { ManagerPanel } from "./components/ManagerPanel";
 import { CartDrawer } from "./components/CartDrawer";
 import { UserAccountModal } from "./components/UserAccountModal";
 import { CheckoutModal } from "./components/CheckoutModal";
@@ -54,9 +55,10 @@ export default function App() {
     "Munições e Chumbinhos",
     "Alvos e Estande"
   ]);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   
-  // View switches
-  const [currentSection, setCurrentSection] = useState<"store" | "admin">("store");
+  // View switches (added manager as a first-class route section)
+  const [currentSection, setCurrentSection] = useState<"store" | "admin" | "manager">("store");
 
   // User Authentication & Address State
   const [loggedUser, setLoggedUser] = useState<UserProfile | null>(() => {
@@ -88,6 +90,19 @@ export default function App() {
   const [filterMaxPrice, setFilterMaxPrice] = useState("");
   const [sortBy, setSortBy] = useState("none");
 
+  // Fetch only logo & name settings from server
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const settingsData = await res.json();
+        setStoreSettings(settingsData);
+      }
+    } catch (err) {
+      console.error("Erro ao puxar dados de personalização:", err);
+    }
+  };
+
   // Fetch initial data from server (including dynamic categories)
   const fetchData = async () => {
     try {
@@ -108,6 +123,7 @@ export default function App() {
         const catData = await resCategories.json();
         setCategories(catData);
       }
+      await fetchSettings();
     } catch (err) {
       console.error("Erro ao carregar dados do servidor Express:", err);
     } finally {
@@ -117,6 +133,13 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+
+    // Check if the manager is accessing the unlisted /manager path or manager=true query parameter
+    const path = window.location.pathname;
+    const search = window.location.search;
+    if (path.toLowerCase().includes("/manager") || search.toLowerCase().includes("manager=true")) {
+      setCurrentSection("manager");
+    }
   }, []);
 
   // Cart Management
@@ -225,14 +248,47 @@ export default function App() {
       {/* ---------------- NAVIGATION HEADER ---------------- */}
       <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900 px-4 md:px-8 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentSection("store")}>
-          <div className="h-9 w-9 rounded-lg bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-950/40">
-            <Crosshair size={20} className="stroke-[2.5]" />
-          </div>
-          <div>
-            <span className="text-sm font-black font-display tracking-widest text-white block uppercase leading-none">
-              TORN <span className="text-red-500">CARABINAS</span>
+          {storeSettings?.logoUrl ? (
+            <div className="h-9 max-w-[120px] flex items-center justify-center rounded overflow-hidden">
+              <img 
+                src={storeSettings.logoUrl} 
+                alt="Logo" 
+                className="h-full object-contain" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1595590424283-b8f17842773f?q=80&w=1000&auto=format&fit=crop";
+                }}
+              />
+            </div>
+          ) : (
+            <div className="h-9 w-9 rounded-lg bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-950/40">
+              <Crosshair size={20} className="stroke-[2.5]" />
+            </div>
+          )}
+          <div className="text-left font-display">
+            <span className="text-sm font-black tracking-widest text-white block uppercase leading-none">
+              {storeSettings?.logoText ? (
+                <>
+                  {storeSettings.logoText.includes(" ") ? (
+                    <>
+                      {storeSettings.logoText.substring(0, storeSettings.logoText.lastIndexOf(" "))}{" "}
+                      <span className="text-red-500">
+                        {storeSettings.logoText.substring(storeSettings.logoText.lastIndexOf(" ") + 1)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-red-500">{storeSettings.logoText}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  TORN <span className="text-red-500">CARABINAS</span>
+                </>
+              )}
             </span>
-            <span className="text-[9px] text-zinc-500 font-mono tracking-wider">TIRO ESPORTIVO</span>
+            <span className="text-[9px] text-zinc-500 font-mono tracking-wider block mt-0.5 uppercase">
+              {storeSettings?.logoSubtext || "TIRO ESPORTIVO"}
+            </span>
           </div>
         </div>
 
@@ -281,6 +337,22 @@ export default function App() {
             <div className="h-8 w-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-zinc-400 font-mono uppercase tracking-wider">Carregando catálogo balístico...</span>
           </div>
+        ) : currentSection === "manager" ? (
+          
+          /* ---------------- UNLISTED TACTICAL MANAGER PANEL ---------------- */
+          <ManagerPanel
+            products={products}
+            categories={categories}
+            settings={storeSettings}
+            onRefreshData={fetchData}
+            onRefreshSettings={fetchSettings}
+            onClose={() => {
+              // Clear URL search and path parameters beautifully
+              window.history.pushState({}, "", "/");
+              setCurrentSection("store");
+            }}
+          />
+
         ) : currentSection === "admin" ? (
           
           /* ---------------- SECURITY ADMIN BOARD ---------------- */
@@ -325,17 +397,6 @@ export default function App() {
                     <span>Explorar Catálogo</span>
                     <ArrowRight size={14} />
                   </a>
-                  
-                  <button
-                    onClick={() => {
-                      const blogSec = document.getElementById("blog-section");
-                      if (blogSec) blogSec.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    className="h-10 px-5 rounded-lg border border-zinc-800 bg-zinc-900/40 text-xs font-semibold text-zinc-300 hover:text-white transition-all flex items-center gap-1.5"
-                  >
-                    <BookOpen size={14} />
-                    <span>Guias e Legislação</span>
-                  </button>
                 </div>
               </div>
 
@@ -551,69 +612,6 @@ export default function App() {
                       onViewDetails={(p) => setActiveProduct(p)}
                       onAddToCart={(p) => handleAddToCart(p, 1)}
                     />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* ---------------- BLOG INTEGRADO ---------------- */}
-            <section id="blog-section" className="border-t border-zinc-900 pt-16 space-y-6">
-              <div className="text-left">
-                <span className="text-xs text-orange-500 font-bold uppercase tracking-widest block font-mono">
-                  DICAS ASSINADAS POR INSTRUTORES
-                </span>
-                <h2 className="text-2xl font-black font-display text-white uppercase tracking-wider mt-1">
-                  Guia Técnico & Regulamentações
-                </h2>
-                <p className="text-xs text-zinc-400 max-w-xl">
-                  Mantenha-se atualizado sobre legislação de calibres e as melhores práticas de manutenção.
-                </p>
-              </div>
-
-              {/* Blog listings in cards - Using publicBlogPosts to hide upcoming scheduled posts */}
-              {publicBlogPosts.length === 0 ? (
-                <p className="text-xs text-zinc-500">Nenhum artigo publicado no blog ainda.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {publicBlogPosts.map((post) => (
-                    <div
-                      key={post.id}
-                      onClick={() => setActivePost(post)}
-                      className="group cursor-pointer flex flex-col md:flex-row gap-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-850 hover:border-zinc-800 hover:bg-zinc-900 transition-all duration-300"
-                    >
-                      <div className="aspect-video md:w-44 w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-850">
-                        <img
-                          src={post.imageUrl}
-                          alt={post.title}
-                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div className="flex-1 flex flex-col justify-between py-1">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1.5 text-[10px] font-bold text-orange-400 uppercase tracking-widest">
-                            <span>{post.category}</span>
-                            <span>•</span>
-                            <span className="text-zinc-500 font-mono normal-case">{post.readTime}</span>
-                          </div>
-                          
-                          <h3 className="font-bold text-zinc-200 group-hover:text-amber-400 transition-colors duration-200 text-sm line-clamp-2 leading-snug">
-                            {post.title}
-                          </h3>
-                          
-                          <p className="text-xs text-zinc-400 line-clamp-2 mt-1.5 leading-relaxed">
-                            {post.excerpt}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2 mt-3 font-mono text-[10px] text-zinc-500">
-                          <User size={12} />
-                          <span>Por {post.author.split(" ")[0]}</span>
-                          <span>•</span>
-                          <span>{post.date}</span>
-                        </div>
-                      </div>
-                    </div>
                   ))}
                 </div>
               )}

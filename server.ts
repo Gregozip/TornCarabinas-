@@ -248,6 +248,23 @@ const INITIAL_BLOG = [
   }
 ];
 
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  stock: number;
+  category: string;
+  imageUrl: string;
+  brand: string;
+  caliber: string;
+  speed: string;
+  action: string;
+  weight: string;
+  featured: boolean;
+}
+
 interface AuditLog {
   id: string;
   timestamp: string;
@@ -259,11 +276,16 @@ interface AuditLog {
 
 // Load Database
 function loadDB(): { 
-  products: typeof INITIAL_PRODUCTS; 
+  products: Product[]; 
   blogPosts: typeof INITIAL_BLOG;
   categories: string[];
   auditLogs: AuditLog[];
   users: any[];
+  settings?: {
+    logoUrl: string;
+    logoText: string;
+    logoSubtext: string;
+  };
 } {
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -286,6 +308,14 @@ function loadDB(): {
       }
       if (!parsed.auditLogs) { parsed.auditLogs = []; modified = true; }
       if (!parsed.users) { parsed.users = []; modified = true; }
+      if (!parsed.settings) {
+        parsed.settings = {
+          logoUrl: "",
+          logoText: "TORN CARABINAS",
+          logoSubtext: "TIRO ESPORTIVO"
+        };
+        modified = true;
+      }
       
       // Decifra os dados sensíveis dos usuários em memória temporária para que o servidor os acesse de forma transparente
       if (parsed.users && Array.isArray(parsed.users)) {
@@ -313,7 +343,12 @@ function loadDB(): {
       "Alvos e Estande"
     ],
     auditLogs: [],
-    users: []
+    users: [],
+    settings: {
+      logoUrl: "",
+      logoText: "TORN CARABINAS",
+      logoSubtext: "TIRO ESPORTIVO"
+    }
   };
   saveDB(initial);
   return initial;
@@ -489,7 +524,7 @@ app.post("/api/users/login", createRateLimiter(5, 60000), (req, res) => {
   res.json({ success: true, user: userNoPassword });
 });
 
-// Password Recovery (Simulado com auditoria e redefinição provisória de segurança)
+// Password Recovery (Simulado com auditoria e redefinição provisória de segurança com token único de 24 dias)
 app.post("/api/users/forgot-password", createRateLimiter(5, 60000), (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -505,34 +540,74 @@ app.post("/api/users/forgot-password", createRateLimiter(5, 60000), (req, res) =
   }
 
   const currentUser = db.users[userIndex];
-  const recoveryToken = crypto.randomBytes(4).toString("hex").toUpperCase(); // ex: C5F8
-  const newProvisionalPassword = `Torn2026@${recoveryToken}`;
+  const now = Date.now();
+  const TWENTY_FOUR_DAYS_MS = 24 * 24 * 60 * 60 * 1000;
 
-  // Update password in DB
+  // Generate unique recovery token, guaranteeing that older active tokens (created < 24 days ago) are not reused
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let recoveryToken = "";
+  let attempts = 0;
+  while (attempts < 1000) {
+    let token = "";
+    for (let i = 0; i < 6; i++) {
+      token += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    const candidate = `TORN-${token}`;
+
+    // check if this is already active on any user
+    const isAlreadyActive = db.users.some((u: any) => {
+      if (u.activeToken && u.activeToken.token === candidate) {
+        if (now - u.activeToken.createdAt < TWENTY_FOUR_DAYS_MS) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!isAlreadyActive) {
+      recoveryToken = candidate;
+      break;
+    }
+    attempts++;
+  }
+
+  if (!recoveryToken) {
+    recoveryToken = `TORN-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  }
+
+  // Update user with activeToken inside db
   db.users[userIndex] = {
     ...currentUser,
-    password: hashPassword(newProvisionalPassword)
+    activeToken: {
+      token: recoveryToken,
+      createdAt: now,
+      used: false
+    }
   };
   saveDB(db);
 
-  const recoveryInstructions = `===========================================
+  const recoveryInstructions = `=====================================================
 🔥 RECUPERAÇÃO DE ACESSO — TORN CARABINAS 🔥
-===========================================
+=====================================================
 Olá, ${currentUser.name}!
 
 Recebemos uma solicitação de recuperação de senha para sua conta de atirador.
 
-Seu acesso provisório tático foi redefinido com sucesso!
+Seu Token de Segurança de 24 dias foi gerado com sucesso!
 👉 E-mail de login: ${currentUser.email}
-🔑 Senha provisória de entrada: ${newProvisionalPassword}
+🔑 Token de recuperação: ${recoveryToken}
 
-Após efetuar o login usando a senha provisória acima, por favor acesse o menu "Seu Perfil" para redefinir sua senha permanente de forma segura.
-
-===========================================`;
+=====================================================
+🛡️ INSTRUÇÕES DE SEGURANÇA TÁTICAS:
+1. Acesse a aba "2. Redefinir com Token" no painel de login.
+2. Insira seu e-mail, o Token acima e digite sua Nova Senha do atirador.
+3. Este token expira e perde a validade em exatamente 24 dias.
+4. Após 24 dias, este código pode ser reutilizado/reciclado por outras contas ou pela mesma conta.
+=====================================================`;
 
   logAudit(
     "Recuperação de Senha", 
-    `Solicitado e-mail de recuperação para '${currentUser.email}'. Senha resetada provisoriamente com token ${recoveryToken}.`, 
+    `Solicitado e-mail de recuperação para '${currentUser.email}'. Token único '${recoveryToken}' gerado.`, 
     req
   );
 
@@ -540,7 +615,67 @@ Após efetuar o login usando a senha provisória acima, por favor acesse o menu 
     success: true, 
     message: "Instruções de recuperação de acesso enviadas para o seu e-mail de atirador cadastrado!",
     debugInstructions: recoveryInstructions,
-    provisionalPassword: newProvisionalPassword
+    token: recoveryToken
+  });
+});
+
+// Reset Password with Token
+app.post("/api/users/reset-password", createRateLimiter(5, 60000), (req, res) => {
+  const { email, token, newPassword } = req.body;
+  if (!email || !token || !newPassword) {
+    return res.status(400).json({ error: "E-mail, token e nova senha são de preenchimento obrigatório." });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "Sua nova senha deve possuir pelo menos 6 caracteres." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const tokenUpper = token.toUpperCase().trim();
+  const db = loadDB();
+  const userIndex = db.users.findIndex(u => u.email.toLowerCase().trim() === emailLower);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Nenhum atirador cadastrado com este endereço de e-mail." });
+  }
+
+  const currentUser = db.users[userIndex];
+  const now = Date.now();
+  const TWENTY_FOUR_DAYS_MS = 24 * 24 * 60 * 60 * 1000;
+
+  if (!currentUser.activeToken || currentUser.activeToken.token !== tokenUpper) {
+    return res.status(400).json({ error: "Token de recuperação inválido ou inexistente para esta conta." });
+  }
+
+  if (currentUser.activeToken.used) {
+    return res.status(400).json({ error: "Este token de recuperação já foi utilizado e não pode ser re-utilizado até expirar." });
+  }
+
+  // Check if token has expired after 24 days
+  if (now - currentUser.activeToken.createdAt >= TWENTY_FOUR_DAYS_MS) {
+    return res.status(400).json({ error: "Este token de recuperação expirou (validade de 24 dias excedida). Solicite um novo token." });
+  }
+
+  // Set the used flat, but KEEP the token and createdAt inside activeToken so that it stays occupied in the system for 24 days
+  db.users[userIndex] = {
+    ...currentUser,
+    password: hashPassword(newPassword),
+    activeToken: {
+      ...currentUser.activeToken,
+      used: true
+    }
+  };
+  saveDB(db);
+
+  logAudit(
+    "Redefinição de Senha", 
+    `Senha redefinida com sucesso para o usuário '${currentUser.email}' usando o token '${tokenUpper}'.`, 
+    req
+  );
+
+  return res.json({ 
+    success: true, 
+    message: "Sua senha de atirador foi atualizada com sucesso!" 
   });
 });
 
@@ -601,6 +736,149 @@ app.put("/api/users/profile", createRateLimiter(15, 60000), (req, res) => {
 
   const { password: _, ...userNoPassword } = db.users[userIndex];
   res.json({ success: true, user: userNoPassword });
+});
+
+// --- ENPOINTS EXCLUSIVOS DE GERÊNCIA TÁTICA (UNLISTED MANAGER PANEL) ---
+
+// GET Store settings (text layer, subtext, and custom logo image format)
+app.get("/api/settings", (req, res) => {
+  const db = loadDB();
+  res.json(db.settings || { logoUrl: "", logoText: "TORN CARABINAS", logoSubtext: "TIRO ESPORTIVO" });
+});
+
+// UPDATE Store settings from unlisted manager
+app.put("/api/settings", (req, res) => {
+  const db = loadDB();
+  db.settings = {
+    logoUrl: req.body.logoUrl !== undefined ? String(req.body.logoUrl).trim() : (db.settings?.logoUrl || ""),
+    logoText: req.body.logoText !== undefined ? String(req.body.logoText).trim() : (db.settings?.logoText || "TORN CARABINAS"),
+    logoSubtext: req.body.logoSubtext !== undefined ? String(req.body.logoSubtext).trim() : (db.settings?.logoSubtext || "TIRO ESPORTIVO")
+  };
+  saveDB(db);
+  logAudit("Edição de Logo", `Logo e configurações gerais atualizados no painel do gerente (Texto: '${db.settings.logoText}')`, req);
+  res.json(db.settings);
+});
+
+// GET direct simple products for manager panel
+app.get("/api/manager/products", (req, res) => {
+  const db = loadDB();
+  res.json(db.products);
+});
+
+// PUT update product via unlisted manager panel (logo, status, description, price, imageUrl)
+app.put("/api/manager/products/:id", (req, res) => {
+  const db = loadDB();
+  const id = req.params.id;
+  const index = db.products.findIndex((p) => p.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Produto não encontrado para atualização rápida de gerência." });
+  }
+
+  const oldProduct = db.products[index];
+  const updated = {
+    ...oldProduct,
+    name: req.body.name !== undefined ? String(req.body.name).trim() : oldProduct.name,
+    price: req.body.price !== undefined ? Number(req.body.price) : oldProduct.price,
+    originalPrice: req.body.originalPrice !== undefined ? (req.body.originalPrice === "" || req.body.originalPrice === null ? undefined : Number(req.body.originalPrice)) : oldProduct.originalPrice,
+    description: req.body.description !== undefined ? String(req.body.description).trim() : oldProduct.description,
+    imageUrl: req.body.imageUrl !== undefined ? String(req.body.imageUrl).trim() : oldProduct.imageUrl,
+    stock: req.body.stock !== undefined ? Number(req.body.stock) : oldProduct.stock,
+    category: req.body.category !== undefined ? String(req.body.category).trim() : oldProduct.category,
+    brand: req.body.brand !== undefined ? String(req.body.brand).trim() : oldProduct.brand,
+    caliber: req.body.caliber !== undefined ? String(req.body.caliber).trim() : oldProduct.caliber,
+    speed: req.body.speed !== undefined ? String(req.body.speed).trim() : oldProduct.speed,
+    action: req.body.action !== undefined ? String(req.body.action).trim() : oldProduct.action,
+    weight: req.body.weight !== undefined ? String(req.body.weight).trim() : oldProduct.weight,
+    featured: req.body.featured !== undefined ? Boolean(req.body.featured) : !!oldProduct.featured
+  };
+
+  db.products[index] = updated;
+  saveDB(db);
+  logAudit("Edição Rápida de Gerente", `Produto '${updated.name}' (ID: ${id}) atualizado pelo painel de gerência direta.`, req);
+  res.json(updated);
+});
+
+// POST create product via unlisted manager panel
+app.post("/api/manager/products", (req, res) => {
+  const db = loadDB();
+  const product = req.body;
+  if (!product.name || !product.price) {
+    return res.status(400).json({ error: "Nome e preço são de preenchimento obrigatório para cadastrar um produto." });
+  }
+
+  const newProduct = {
+    id: `prod-${Date.now()}`,
+    name: product.name.trim(),
+    price: Number(product.price),
+    originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+    stock: product.stock !== undefined ? Number(product.stock) : 10,
+    category: product.category || "Carabinas PCP",
+    description: product.description ? product.description.trim() : "",
+    imageUrl: product.imageUrl || "https://images.unsplash.com/photo-1595590424283-b8f17842773f?q=80&w=1000&auto=format&fit=crop",
+    brand: product.brand || "Desconhecida",
+    caliber: product.caliber || "N/A",
+    speed: product.speed || "N/A",
+    action: product.action || "Ação Manual",
+    weight: product.weight || "N/A",
+    featured: !!product.featured
+  };
+  db.products.push(newProduct);
+  saveDB(db);
+  logAudit("Criação Rápida de Gerente", `Produto '${newProduct.name}' gerado pelo painel de gerência direta.`, req);
+  res.status(201).json(newProduct);
+});
+
+// Manager categories endpoints (bypass checkAuth for manager ease)
+app.post("/api/manager/categories", (req, res) => {
+  const db = loadDB();
+  const { name } = req.body;
+  if (!name || typeof name !== "string") {
+    return res.status(400).json({ error: "Nome de categoria inválido" });
+  }
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return res.status(400).json({ error: "Nome da categoria não pode ser vazio" });
+  }
+  if (db.categories.includes(cleanName)) {
+    return res.status(400).json({ error: "A categoria especificada já existe" });
+  }
+  db.categories.push(cleanName);
+  saveDB(db);
+  logAudit("Criação de Categoria pelo Gerente", `Nova categoria '${cleanName}' registrada no catálogo pelo gerente.`, req);
+  res.status(201).json({ success: true, categories: db.categories });
+});
+
+app.delete("/api/manager/categories/:name", (req, res) => {
+  const db = loadDB();
+  const categoryName = req.params.name;
+  if (!db.categories.includes(categoryName)) {
+    return res.status(404).json({ error: "Categoria não encontrada" });
+  }
+  db.categories = db.categories.filter((c) => c !== categoryName);
+  db.products = db.products.map((p) => {
+    if (p.category === categoryName) {
+      return { ...p, category: "Geral" };
+    }
+    return p;
+  });
+  saveDB(db);
+  logAudit("Exclusão de Categoria pelo Gerente", `Categoria '${categoryName}' excluída pelo gerente.`, req);
+  res.json({ success: true, categories: db.categories });
+});
+
+// DELETE product via unlisted manager panel
+app.delete("/api/manager/products/:id", (req, res) => {
+  const db = loadDB();
+  const id = req.params.id;
+  const productToDelete = db.products.find((p) => p.id === id);
+  if (!productToDelete) {
+    return res.status(404).json({ error: "Produto não localizado" });
+  }
+
+  db.products = db.products.filter((p) => p.id !== id);
+  saveDB(db);
+  logAudit("Exclusão Rápida de Gerente", `Produto '${productToDelete.name}' (ID: ${id}) removido pelo painel de gerência direta.`, req);
+  res.json({ success: true, message: "Produto deletado com sucesso pelo gerente" });
 });
 
 // Categories endpoints

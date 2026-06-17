@@ -34,6 +34,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {product.category}
         </div>
 
+        {/* Discount Badge */}
+        {product.originalPrice && product.originalPrice > product.price && (
+          <div className="absolute top-11 left-3 rounded bg-emerald-600/90 text-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest border border-emerald-500/30">
+            -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% DESC
+          </div>
+        )}
+
         {/* Action Tag (PCP / CO2 etc) */}
         {product.action && (
           <div className="absolute top-3 right-3 rounded bg-red-600 text-white px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest">
@@ -91,6 +98,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="mt-auto pt-4 flex items-end justify-between border-t border-white/10">
           <div className="flex flex-col">
             <span className="text-[9px] text-zinc-505 uppercase tracking-widest font-semibold">Preço à vista</span>
+            {product.originalPrice && product.originalPrice > product.price && (
+              <span className="text-[11px] text-zinc-500 line-through leading-none mt-0.5" id={`product-old-price-${product.id}`}>
+                De: R$ {product.originalPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
             <span className="text-base font-bold text-white font-display">
               R$ {product.price.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
