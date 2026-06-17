@@ -158,15 +158,46 @@ export default function App() {
     setIsCartOpen(true);
   };
 
+  const handleBuyNow = (product: Product, quantity: number = 1) => {
+    setCartItems((prevItems) => {
+      const existing = prevItems.find((item) => item.product.id === product.id);
+      if (existing) {
+        const newQty = Math.min(product.stock, existing.quantity + quantity);
+        return prevItems.map((item) =>
+          item.product.id === product.id ? { ...item, quantity: newQty } : item
+        );
+      }
+      return [...prevItems, { product, quantity }];
+    });
+    setIsCheckoutOpen(true);
+  };
+
   const handleLoginSuccess = (user: UserProfile) => {
     setLoggedUser(user);
     localStorage.setItem("torn_user", JSON.stringify(user));
+    const emailLower = user.email.toLowerCase().trim();
+    if (emailLower === "fireofbombs@gmail.com" || emailLower === "luizcslana@gmail.com") {
+      sessionStorage.setItem("torn_manager_authorized", "true");
+      sessionStorage.setItem("torn_manager_user", user.name || "Luiz");
+    }
   };
 
   const handleLogout = () => {
     setLoggedUser(null);
     localStorage.removeItem("torn_user");
+    sessionStorage.removeItem("torn_manager_authorized");
+    sessionStorage.removeItem("torn_manager_user");
   };
+
+  useEffect(() => {
+    if (loggedUser) {
+      const emailLower = loggedUser.email.toLowerCase().trim();
+      if (emailLower === "fireofbombs@gmail.com" || emailLower === "luizcslana@gmail.com") {
+        sessionStorage.setItem("torn_manager_authorized", "true");
+        sessionStorage.setItem("torn_manager_user", loggedUser.name || "Luiz");
+      }
+    }
+  }, [loggedUser]);
 
   const handleUpdateCartQuantity = (productId: string, quantity: number) => {
     setCartItems((prevItems) =>
@@ -296,6 +327,29 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           {currentSection === "store" && (
             <>
+              {/* Shortcut to Manager Panel for Owners */}
+              {loggedUser && (
+                (() => {
+                  const emailLower = loggedUser.email.toLowerCase().trim();
+                  return emailLower === "fireofbombs@gmail.com" || emailLower === "luizcslana@gmail.com";
+                })() && (
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem("torn_manager_authorized", "true");
+                      sessionStorage.setItem("torn_manager_user", loggedUser.name || "Luiz");
+                      setCurrentSection("manager");
+                    }}
+                    className="h-10 px-3.5 rounded-xl border border-red-500/30 bg-red-650/15 text-red-500 hover:bg-red-600 hover:text-white flex items-center gap-1.5 transition-all duration-200 active:scale-95 cursor-pointer"
+                    title="Acessar o Painel de Gerente"
+                  >
+                    <SlidersHorizontal size={14} />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Painel de Gerente
+                    </span>
+                  </button>
+                )
+              )}
+
               {/* My Account Button */}
               <button
                 onClick={() => setIsAccountOpen(true)}
@@ -694,6 +748,7 @@ export default function App() {
           product={activeProduct}
           onClose={() => setActiveProduct(null)}
           onAddToCart={(p, qty) => handleAddToCart(p, qty)}
+          onBuyNow={(p, qty) => handleBuyNow(p, qty)}
         />
       )}
 

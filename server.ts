@@ -320,6 +320,51 @@ function loadDB(): {
       // Decifra os dados sensíveis dos usuários em memória temporária para que o servidor os acesse de forma transparente
       if (parsed.users && Array.isArray(parsed.users)) {
         parsed.users = parsed.users.map((u: any) => decryptUser(u));
+
+        // Garantir que os proprietários estejam cadastrados no sistema
+        const hasFire = parsed.users.some(u => u.email && u.email.toLowerCase().trim() === "fireofbombs@gmail.com");
+        if (!hasFire) {
+          parsed.users.push({
+            id: "owner-fire",
+            name: "Luiz Proprietário",
+            email: "fireofbombs@gmail.com",
+            password: hashPassword("@Vzxt13wkj"),
+            cep: "00000-000",
+            cpfCnpj: "000.000.000-00",
+            careOf: "Proprietário",
+            street: "Sede Central",
+            number: "1",
+            complement: "Sala Presidencial",
+            neighborhood: "Centro",
+            state: "SP",
+            city: "São Paulo",
+            reference: "Centro de Comando",
+            phones: ["(11) 99999-9999"]
+          });
+          modified = true;
+        }
+
+        const hasLuiz = parsed.users.some(u => u.email && u.email.toLowerCase().trim() === "luizcslana@gmail.com");
+        if (!hasLuiz) {
+          parsed.users.push({
+            id: "owner-luiz",
+            name: "Luiz C. S. Lana",
+            email: "luizcslana@gmail.com",
+            password: hashPassword("@RedW0rld2341"),
+            cep: "00000-000",
+            cpfCnpj: "000.000.000-00",
+            careOf: "Coproprietário",
+            street: "Sede Administrativa",
+            number: "2",
+            complement: "Apoio Técnico",
+            neighborhood: "Centro",
+            state: "SP",
+            city: "São Paulo",
+            reference: "Apoio",
+            phones: ["(11) 98888-8888"]
+          });
+          modified = true;
+        }
       }
 
       if (modified) {

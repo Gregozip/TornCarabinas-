@@ -230,25 +230,11 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
     setSuccessMsg("");
     setLoading(true);
 
-    // Clean empty phone strings
-    const cleanedPhones = profPhones.map(p => p.trim()).filter(Boolean);
-
     try {
       const updateData: any = {
         id: loggedUser.id,
         name: profName,
         email: profEmail,
-        cep: profCep,
-        cpfCnpj: profCpfCnpj,
-        careOf: profCareOf,
-        street: profStreet,
-        number: profNumber,
-        complement: profComplement,
-        neighborhood: profNeighborhood,
-        state: profState,
-        city: profCity,
-        reference: profReference,
-        phones: cleanedPhones,
       };
 
       if (profPassword.trim() !== "") {
@@ -419,7 +405,7 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                   ) : (
                     <>
                       <ShieldCheck size={14} />
-                      <span>Conectar ao Painel</span>
+                      <span>Entrar</span>
                     </>
                   )}
                 </button>
@@ -867,190 +853,6 @@ export const UserAccountModal: React.FC<UserAccountModalProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
                     id="prof-password-change"
                   />
-                </div>
-
-                {/* Shipping details */}
-                <div className="col-span-1 md:col-span-2 pt-2">
-                  <h4 className="text-zinc-400 font-mono text-[9px] uppercase tracking-wider border-b border-zinc-900 pb-1 mb-3">
-                    Endereço de Entrega Completo
-                  </h4>
-                </div>
-
-                <div className="col-span-1 md:col-span-2">
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Aos Cuidados De (Destinatário Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    value={profCareOf}
-                    onChange={(e) => setProfCareOf(e.target.value)}
-                    placeholder="Ex: Sócio do Clube, Familiar, Recepção..."
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                    id="prof-careof-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    CEP
-                  </label>
-                  <input
-                    type="text"
-                    value={profCep}
-                    onChange={(e) => setProfCep(e.target.value)}
-                    placeholder="00000-000"
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono"
-                    id="prof-cep-input"
-                  />
-                </div>
-
-                <div className="col-span-1 md:col-span-2">
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="col-span-3">
-                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                        Rua / Logradouro
-                      </label>
-                      <input
-                        type="text"
-                        value={profStreet}
-                        onChange={(e) => setProfStreet(e.target.value)}
-                        placeholder="Nome da avenida ou rua"
-                        className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                        id="prof-street-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                        Número
-                      </label>
-                      <input
-                        type="text"
-                        value={profNumber}
-                        onChange={(e) => setProfNumber(e.target.value)}
-                        placeholder="N°"
-                        className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono"
-                        id="prof-num-input"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Complemento
-                  </label>
-                  <input
-                    type="text"
-                    value={profComplement}
-                    onChange={(e) => setProfComplement(e.target.value)}
-                    placeholder="Bloco, Apto, Sala, etc."
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                    id="prof-comp-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    value={profNeighborhood}
-                    onChange={(e) => setProfNeighborhood(e.target.value)}
-                    placeholder="Bairro"
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                    id="prof-bairro-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Cidade
-                  </label>
-                  <input
-                    type="text"
-                    value={profCity}
-                    onChange={(e) => setProfCity(e.target.value)}
-                    placeholder="Cidade"
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                    id="prof-city-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Estado (Conforme UF)
-                  </label>
-                  <input
-                    type="text"
-                    value={profState}
-                    onChange={(e) => setProfState(e.target.value)}
-                    placeholder="Ex: SP, RJ, MG"
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono"
-                    id="prof-state-input"
-                  />
-                </div>
-
-                <div className="col-span-1 md:col-span-2">
-                  <label className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500 mb-1">
-                    Ponto de Referência
-                  </label>
-                  <input
-                    type="text"
-                    value={profReference}
-                    onChange={(e) => setProfReference(e.target.value)}
-                    placeholder="Perto do posto, em frente ao mercado..."
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-sans"
-                    id="prof-ref-input"
-                  />
-                </div>
-
-                {/* Phone numbers list with interactive adding / removing */}
-                <div className="col-span-1 md:col-span-2 pt-2">
-                  <div className="flex justify-between items-center border-b border-zinc-900 pb-1 mb-3">
-                    <h4 className="text-zinc-400 font-mono text-[9px] uppercase tracking-wider">
-                      Telefones de Contato
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={addPhoneField}
-                      className="text-[9px] font-mono font-bold uppercase tracking-wider text-red-400 hover:text-red-300 flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded transition-all cursor-pointer"
-                      id="btn-add-phone-field"
-                    >
-                      <Plus size={10} />
-                      <span>Adicionar Telefone</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {profPhones.map((phone, idx) => (
-                      <div key={idx} className="flex gap-2 items-center">
-                        <div className="relative flex-1">
-                          <input
-                            type="text"
-                            value={phone}
-                            onChange={(e) => handlePhoneChange(idx, e.target.value)}
-                            placeholder="(DD) 99999-9999"
-                            className="w-full bg-zinc-950 border border-zinc-850 rounded p-2 pl-8 text-xs text-zinc-300 focus:outline-none focus:border-red-600 font-mono"
-                            required
-                            id={`prof-phone-input-${idx}`}
-                          />
-                          <Phone size={11} className="absolute left-2.5 top-3 text-zinc-650" />
-                        </div>
-                        {profPhones.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removePhoneField(idx)}
-                            className="h-8 w-8 rounded bg-zinc-900 border border-zinc-850 text-zinc-500 hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
-                            title="Remover este Telefone"
-                            id={`btn-remove-phone-${idx}`}
-                          >
-                            <Trash size={12} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
               </div>

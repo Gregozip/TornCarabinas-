@@ -1,23 +1,30 @@
 import React, { useState } from "react";
 import { Product } from "../types";
-import { X, ShoppingCart, Scale, Crosshair, Zap, Package, Tag, ShieldCheck } from "lucide-react";
+import { X, ShoppingCart, Scale, Crosshair, Zap, Package, Tag, ShieldCheck, Check } from "lucide-react";
 
 interface ProductDetailModalProps {
   product: Product;
   onClose: () => void;
   onAddToCart: (product: Product, quantity: number) => void;
+  onBuyNow: (product: Product, quantity: number) => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   onClose,
   onAddToCart,
+  onBuyNow,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const isOutOfStock = product.stock <= 0;
 
   const handleAddToCart = () => {
     onAddToCart(product, quantity);
+    onClose();
+  };
+
+  const handleBuyNow = () => {
+    onBuyNow(product, quantity);
     onClose();
   };
 
@@ -182,18 +189,31 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   )}
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     disabled={isOutOfStock}
                     onClick={handleAddToCart}
                     className={`flex-1 h-11 flex items-center justify-center gap-2 rounded text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                       isOutOfStock
                         ? "bg-zinc-800 text-zinc-550 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-black/20 active:translate-y-px"
+                        : "bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-850 active:translate-y-px"
                     }`}
                   >
                     <ShoppingCart size={15} />
                     <span>Adicionar ao Carrinho</span>
+                  </button>
+
+                  <button
+                    disabled={isOutOfStock}
+                    onClick={handleBuyNow}
+                    className={`flex-1 h-11 flex items-center justify-center gap-2 rounded text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                      isOutOfStock
+                        ? "bg-zinc-800 text-zinc-550 cursor-not-allowed"
+                        : "bg-red-650 hover:bg-red-750 text-white shadow-lg shadow-black/20 active:translate-y-px"
+                    }`}
+                  >
+                    <Check size={15} />
+                    <span>Comprar Agora</span>
                   </button>
                 </div>
                 

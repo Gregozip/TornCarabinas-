@@ -386,7 +386,7 @@ export const ManagerPanel: React.FC<ManagerPanelProps> = ({
               Autenticação de Gerente
             </h2>
             <p className="text-xs text-zinc-400 max-w-xs mx-auto">
-              Acesso exclusivo para gerenciamento tático da vitrine. Identifique-se com sua credencial de atirador chefe.
+              Acesso exclusivo para gerenciamento tático da vitrine. Identifique-se com sua credencial de gerente.
             </p>
           </div>
 
@@ -432,7 +432,7 @@ export const ManagerPanel: React.FC<ManagerPanelProps> = ({
               className="w-full h-11 bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-wider text-white rounded-xl transition-all shadow-lg shadow-black/50 hover:shadow-red-900/10 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               id="manager-login-submit"
             >
-              <span>Entrar no Painel</span>
+              <span>Entrar</span>
               <ArrowRight size={14} />
             </button>
           </form>
