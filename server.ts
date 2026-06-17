@@ -29,20 +29,27 @@ const DB_ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY || "torn-carabinas-super
 const CRYPTO_KEY = crypto.createHash("sha256").update(DB_ENCRYPTION_KEY).digest();
 const IV_LENGTH = 16;
 
-function encrypt(text: string): string {
-  if (!text) return "";
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv("aes-256-cbc", CRYPTO_KEY, iv);
-  let encrypted = cipher.update(text, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  return iv.toString("hex") + ":" + encrypted;
-}
-
-function decrypt(text: string): string {
+function encrypt(text: any): string {
   if (!text) return "";
   try {
-    const parts = text.split(":");
-    if (parts.length < 2) return text;
+    const str = String(text);
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv("aes-256-cbc", CRYPTO_KEY, iv);
+    let encrypted = cipher.update(str, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return iv.toString("hex") + ":" + encrypted;
+  } catch (e) {
+    console.error("Erro na criptografia, retornando plano:", e);
+    return String(text);
+  }
+}
+
+function decrypt(text: any): string {
+  if (!text) return "";
+  try {
+    const str = String(text);
+    const parts = str.split(":");
+    if (parts.length < 2) return str;
     const iv = Buffer.from(parts.shift() || "", "hex");
     const encryptedText = Buffer.from(parts.join(":"), "hex");
     const decipher = crypto.createDecipheriv("aes-256-cbc", CRYPTO_KEY, iv);
@@ -50,7 +57,7 @@ function decrypt(text: string): string {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
   } catch (e) {
-    return text; // Resiliência para dados planos anteriores
+    return String(text); // Resiliência para dados planos anteriores
   }
 }
 
@@ -102,22 +109,36 @@ function encryptUser(user: any): any {
 const apiHits = new Map<string, { count: number; resetTime: number }>();
 function createRateLimiter(limit: number, windowMs: number) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "127.0.0.1").split(",")[0];
-    const now = Date.now();
-    const info = apiHits.get(ip);
-    if (!info) {
-      apiHits.set(ip, { count: 1, resetTime: now + windowMs });
-      return next();
+    try {
+      let ip = "127.0.0.1";
+      const forwarded = req.headers["x-forwarded-for"];
+      if (typeof forwarded === "string") {
+        ip = forwarded.split(",")[0].trim();
+      } else if (Array.isArray(forwarded) && forwarded.length > 0) {
+        ip = forwarded[0].split(",")[0].trim();
+      } else if (req.socket && req.socket.remoteAddress) {
+        ip = req.socket.remoteAddress;
+      }
+
+      const now = Date.now();
+      const info = apiHits.get(ip);
+      if (!info) {
+        apiHits.set(ip, { count: 1, resetTime: now + windowMs });
+        return next();
+      }
+      if (now > info.resetTime) {
+        apiHits.set(ip, { count: 1, resetTime: now + windowMs });
+        return next();
+      }
+      info.count += 1;
+      if (info.count > limit) {
+        return res.status(429).json({ error: "Bloqueio preventivo temporário ativado. Muitas solicitações num curto intervalo de tempo." });
+      }
+      next();
+    } catch (err) {
+      console.error("Erro no rate limiter, continuando bypass para evitar quebra de sistema:", err);
+      next();
     }
-    if (now > info.resetTime) {
-      apiHits.set(ip, { count: 1, resetTime: now + windowMs });
-      return next();
-    }
-    info.count += 1;
-    if (info.count > limit) {
-      return res.status(429).json({ error: "Bloqueio preventivo temporário ativado. Muitas solicitações num curto intervalo de tempo." });
-    }
-    next();
   };
 }
 
@@ -1116,6 +1137,16 @@ app.delete("/api/blog/:id", checkAuth, (req, res) => {
   saveDB(db);
   logAudit("Exclusão de Post", `Artigo do blog deletado de forma definitiva: '${postToDelete.title}' (ID: ${id}).`, req);
   res.json({ success: true, message: "Artigo deletado com sucesso" });
+});
+
+// --- GLOBAL EXCEPTION JSON REPORTER FOR EXPRESS SECURITY SHIELD ---
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Erro Express Crítico Capturado:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || "Erro de processamento interno do servidor",
+    details: process.env.NODE_ENV !== "production" ? err.stack : undefined
+  });
 });
 
 // ---------------- VITE MIDDLEWARE SETUP ----------------
